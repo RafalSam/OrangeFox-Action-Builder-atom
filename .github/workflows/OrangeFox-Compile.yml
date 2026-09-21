@@ -1,117 +1,150 @@
 name: OrangeFox - Build
 
-# Credits to:
-# https://github.com/TeamWin
-# https://gitlab.com/OrangeFox
-# https://github.com/azwhikaru for Recovery Builder Template
-# And all Contributors in every repositories I used
+"on":
+workflow_dispatch:
+inputs:
+MANIFEST_BRANCH:
+description: "OrangeFox Manifest Branch"
+required: true
+default: "11.0"
+type: choice
+options:
+- "11.0"
+- "12.1"
 
-on:
-  workflow_dispatch:
-    inputs:
-      MANIFEST_BRANCH:
-        description: 'OrangeFox Manifest Branch'
-        required: true
-        default: '12.1'
-        type: choice
-        options:
-        - 12.1
-        - 11.0
-      DEVICE_TREE:
-        description: 'OrangeFox Device Tree'
-        required: true
-        default: 'https://github.com/HuaZoffice/OFRP-device_xiaomi_atom'
-      DEVICE_TREE_BRANCH:
-        description: 'OrangeFox Device Tree Branch'
-        required: true
-        default: 'ofrp_12.1'
-      DEVICE_PATH:
-        description: 'Specify your Device Path'
-        required: true
-        default: 'device/xiaomi/atom'
-      DEVICE_NAME:
-        description: 'Specify your Device Codename'
-        required: true
-        default: 'atom'
-      BUILD_TARGET:
-        description: 'Specify your Build Target'
-        required: true
-        default: 'recovery'
-        type: choice
-        options:
-        - boot
-        - recovery
-        - vendorboot
+```
+  DEVICE_TREE:
+    description: "OrangeFox Device Tree"
+    required: true
+    default: "https://github.com/adog1297/Orange-Fox-Recovery-for-Samsung-Galaxy-Xcover-4S"
+
+  DEVICE_TREE_BRANCH:
+    description: "OrangeFox Device Tree Branch"
+    required: true
+    default: "master"
+
+  DEVICE_PATH:
+    description: "Device Path"
+    required: true
+    default: "device/samsung/xcover4s"
+
+  DEVICE_NAME:
+    description: "Device Codename"
+    required: true
+    default: "xcover4s"
+
+  BUILD_TARGET:
+    description: "Build Target"
+    required: true
+    default: "recovery"
+    type: choice
+    options:
+      - "recovery"
+      - "boot"
+      - "vendorboot"
+```
 
 jobs:
-  build:
-    name: Build OFR by ${{ github.actor }}
-    runs-on: ubuntu-latest
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    permissions:
-      contents: write
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-              
-    - name: Clean-up
-      uses: rokibhasansagar/slimhub_actions@main
+build:
+name: Build OrangeFox
+runs-on: ubuntu-22.04
 
-    - name: Swap Space
-      uses: pierotofy/set-swap-space@master
-      with:
-        swap-size-gb: 24
-      
-    - name: Build Environment
-      run: |
-        sudo apt install aria2 -y
-        git clone https://gitlab.com/OrangeFox/misc/scripts.git -b master
-        cd scripts
-        sudo bash setup/android_build_env.sh
-      
-    - name: Set-up Manifest
-      if: inputs.MANIFEST_BRANCH == '11.0' || inputs.MANIFEST_BRANCH == '12.1'
-      run: |
-        mkdir -p ${GITHUB_WORKSPACE}/OrangeFox
-        cd ${GITHUB_WORKSPACE}/OrangeFox
-        git config --global user.name "${{ github.actor }}"
-        git config --global user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
-        git clone https://gitlab.com/OrangeFox/sync.git -b master
-        cd sync
-        ./orangefox_sync.sh --branch ${{ inputs.MANIFEST_BRANCH }} --path ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
+```
+permissions:
+  contents: write
 
-    - name: Clone Device Tree
-      run: |
-        cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
-        git clone ${{ inputs.DEVICE_TREE }} -b ${{ inputs.DEVICE_TREE_BRANCH }} ./${{ inputs.DEVICE_PATH }}
-        cd ${{ inputs.DEVICE_PATH }}
-        echo "COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
+steps:
+  - name: Checkout
+    uses: actions/checkout@v4
 
-    - name: Building OrangeFox
-      run: |
-        cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
-        set +e
-        source build/envsetup.sh
-        export ALLOW_MISSING_DEPENDENCIES=true
-        set -e
-        lunch twrp_${{ inputs.DEVICE_NAME }}-eng && make clean && mka adbd ${{ inputs.BUILD_TARGET }}image
+  - name: Clean-up
+    uses: rokibhasansagar/slimhub_actions@main
 
-    - name: Set Release Properties
-      run: |
-        echo "BUILD_DATE=$(TZ=Asia/Manila date +%Y%m%d)" >> $GITHUB_ENV
-        cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
+  - name: Swap Space
+    uses: pierotofy/set-swap-space@master
+    with:
+      swap-size-gb: 24
 
-    - name: Upload to Release
-      uses: softprops/action-gh-release@v2
-      with:
-        files: |
-          OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/out/target/product/${{ inputs.DEVICE_NAME }}/OrangeFox*.img
-          OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/out/target/product/${{ inputs.DEVICE_NAME }}/OrangeFox*.zip
-        name: OrangeFox Recovery for ${{ inputs.DEVICE_NAME }} // ${{ env.BUILD_DATE }}
-        tag_name: ${{ github.run_id }}
-        body: |
-          ## OrangeFox Recovery Build - Unofficial
-          Build: fox_${{ inputs.MANIFEST_BRANCH }}
-          Device: [Device Tree/Branch](${{ inputs.DEVICE_TREE }}/tree/${{ inputs.DEVICE_TREE_BRANCH }})
-          Commit: Most recent [commit](${{ inputs.DEVICE_TREE }}/commit/${{ env.COMMIT_ID }}) during building.
+  - name: Build Environment
+    run: |
+      sudo apt-get update
+      sudo apt-get install -y aria2
+      git clone https://gitlab.com/OrangeFox/misc/scripts.git -b master
+      cd scripts
+      sudo bash setup/android_build_env.sh
+
+  - name: Set-up Manifest
+    run: |
+      mkdir -p "${GITHUB_WORKSPACE}/OrangeFox"
+      cd "${GITHUB_WORKSPACE}/OrangeFox"
+
+      git config --global user.name "${{ github.actor }}"
+      git config --global user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+
+      git clone https://gitlab.com/OrangeFox/sync.git -b master sync
+      cd sync
+
+      chmod +x orangefox_sync.sh
+
+      ./orangefox_sync.sh \
+        --branch "${{ inputs.MANIFEST_BRANCH }}" \
+        --path "${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}"
+
+      echo "=== OrangeFox directory ==="
+      ls -lah "${GITHUB_WORKSPACE}/OrangeFox"
+
+      echo "=== Checking source directory ==="
+      test -d "${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}"
+
+      echo "=== Checking envsetup ==="
+      test -f "${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/build/envsetup.sh"
+
+      echo "OrangeFox source tree successfully created."
+
+  - name: Clone Device Tree
+    run: |
+      cd "${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}"
+
+      git clone \
+        -b "${{ inputs.DEVICE_TREE_BRANCH }}" \
+        "${{ inputs.DEVICE_TREE }}" \
+        "${{ inputs.DEVICE_PATH }}"
+
+      cd "${{ inputs.DEVICE_PATH }}"
+
+      echo "COMMIT_ID=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+  - name: Building OrangeFox
+    run: |
+      cd "${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}"
+
+      export ALLOW_MISSING_DEPENDENCIES=true
+
+      source build/envsetup.sh
+
+      lunch omni_${{ inputs.DEVICE_NAME }}-eng
+
+      make clean
+
+      mka adbd ${{ inputs.BUILD_TARGET }}image
+
+  - name: Check Build
+    run: |
+      cd "${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}"
+
+      echo "=== OUTPUT ==="
+      ls -lah "out/target/product/${{ inputs.DEVICE_NAME }}/"
+
+      echo "=== ORANGEFOX IMAGES ==="
+      find "out/target/product/${{ inputs.DEVICE_NAME }}" \
+        -maxdepth 1 \
+        -type f \
+        -name 'OrangeFox*' \
+        -print
+
+  - name: Set Release Properties
+    run: |
+      echo "BUILD_DATE=$(TZ=Europe/Warsaw date +%Y%m%d)" >> "$GITHUB_ENV"
+
+  - name: Upload
+```
